@@ -5,6 +5,13 @@
 # vscode
 .vscode/
 
+# images
+*.png
+
+# artifacts
+*.pickle
+*.tar
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
