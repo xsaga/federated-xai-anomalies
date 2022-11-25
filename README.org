@@ -1,0 +1,25 @@
+* federated-xai-anomalies
+
+** Environment
+
+Create the environment from the ~environment.yml~ file:
+
+#+BEGIN_SRC bash
+  conda env create -f environment.yml
+#+END_SRC
+
+Activate the environment with:
+
+#+BEGIN_SRC bash
+  conda activate flxai
+#+END_SRC
+
+
+** Dependencies
+
+- This project uses [[https://github.com/xsaga/kfed-rounded][https://github.com/xsaga/kfed-rounded]] for the one-shot federated learning k-means implementation.
+  It is a modified fork from the original implementation at [[https://github.com/metastableB/kfed][https://github.com/metastableB/kfed]]
+  by [[https://proceedings.mlr.press/v139/dennis21a.html][Dennis, D. K., Li, T., & Smith, V. (2021, July). Heterogeneity for the win: One-shot federated clustering. In International Conference on Machine Learning (pp. 2611-2620). PMLR]].
+- ~wget~ (optional)
+- ~find~ (optional)
+- ~7zip~ (optional)

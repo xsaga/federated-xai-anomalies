@@ -1,0 +1,21 @@
+name: flxai
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - ipython
+  - numpy=1.23.*
+  - pandas=1.5.*
+  - scikit-learn=1.1.*
+  - scipy=1.9.*
+  - matplotlib=3.6.*
+  - seaborn=0.12.*
+  - pytorch=1.13.*
+  - shap=0.41.*
+  - hdbscan=0.8.*
+  - umap-learn=0.5.*
+  - pip
+  - pip:
+    - git+https://github.com/xsaga/kfed-rounded.git
