@@ -1,3 +1,6 @@
+import argparse
+import sys
+
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -111,12 +114,12 @@ def test(model, loss_function, valid_generator) -> float:
     return valid_loss_acc / len(valid_generator)
 
 
-def main():
-    DATA_BASEPATH = Path("archive.ics.uci.edu/ml/machine-learning-databases/00442/")
-    DEVICE_NAME = "Danmini_Doorbell"
+def main(nbaiot_data_basepath: Path, nbaiot_device_name: str):
+    DATA_BASEPATH = nbaiot_data_basepath
+    DEVICE_NAME = nbaiot_device_name
     GAFGYT_BASEDIR = Path("gafgyt_attacks.rar.d")
     MIRAI_BASEDIR = Path("mirai_attacks.rar.d")
-    MODEL_SERIALIZED_PATH = Path("nbaiot_ae.pt")
+    MODEL_SERIALIZED_PATH = Path(f"{DEVICE_NAME}_nbaiot_ae.pt")
     train_lr = 0.012
     train_epochs = 20  # 800
     SHOW = True
@@ -200,7 +203,7 @@ def main():
              "loss": None,
              "train_loss": None,
              "num_samples": None}
-    torch.save(chkpt, "data/nbaiot_ae.tar")
+    torch.save(chkpt, f"data/{DEVICE_NAME}_nbaiot_ae.tar")
     # validation data (scaled)
     df_opt = pd.DataFrame(ds_opt_scaled, columns=df_benign.columns)
     df_opt.to_pickle(f"data/{DEVICE_NAME}_valid.pickle")
@@ -215,4 +218,15 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Process N-BaIoT dataset.")
+    parser.add_argument("-b", "--basepath", type=lambda p: Path(p).absolute(), default=Path("archive.ics.uci.edu/ml/machine-learning-databases/00442/"),
+                        help="N-BaIoT data directory.")
+    parser.add_argument("-d", "--device", type=str, required=True,
+                        help="Device name.")
+
+    args = parser.parse_args()
+
+    if not (args.basepath / args.device).is_dir():
+        sys.exit(f"{args.basepath / args.device} is not a directory.")
+
+    main(args.basepath, args.device)

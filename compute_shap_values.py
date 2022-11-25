@@ -16,6 +16,8 @@ import shap
 from matplotlib import pyplot as plt
 import seaborn as sns
 
+from fkms.algorithms import kfed
+
 
 def reconstruction_error(model, loss_function, samples):
     """Apply the model prediction to a list of samples."""
@@ -28,10 +30,6 @@ def reconstruction_error(model, loss_function, samples):
 
 def model_predict(X):
     return reconstruction_error(model, loss_func, torch.from_numpy(X))
-
-
-def kfed(x_dev, dev_k, k, useSKLearn=True, sparse=False, round_values=True):
-    raise NotImplementedError("Importar el kfed-round")
 
 
 def federated_baseline(client_data: List[np.ndarray], num_instances: int, column_names):
@@ -56,11 +54,9 @@ parser.add_argument("-t", "--test", type=lambda p: Path(p).absolute(), nargs="+"
                     help="List of test datasets. One for each FL client.")
 parser.add_argument("-o", "--output", type=lambda p: Path(p).absolute(), required=False,
                     help="Output filename of the serialized results.")
-# args = parser.parse_args()
-args = parser.parse_args(["--method", "packet", "-m", "data/global_model_cluster_coap.tar", "--dimensions", "69",
-                          "-k", "5",  # "-s", "0.1",
-                          "-v", "data/iotsim-combined-cycle-1_valid.pickle", "data/iotsim-combined-cycle-2_valid.pickle", "data/iotsim-combined-cycle-3_valid.pickle",
-                          "-t", "data/iotsim-combined-cycle-1_miraiscanload.pickle", "data/iotsim-combined-cycle-1_nmapcoapampli.pickle", "data/iotsim-combined-cycle-1_miraidos_sampled.pickle"])
+
+args = parser.parse_args()
+
 assert len(args.validation) == len(args.test), "Clients must have the same number of validation and test datasets"
 
 num_clients = len(args.validation)
