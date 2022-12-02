@@ -1,6 +1,7 @@
 """Cluster anomalies"""
 
 import argparse
+import io
 import itertools
 import pickle
 from pathlib import Path
@@ -22,6 +23,8 @@ from sklearn import preprocessing
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 from sklearn.metrics import adjusted_mutual_info_score, adjusted_rand_score, v_measure_score
+from sklearn.ensemble import RandomForestClassifier
+from sklearn import tree
 
 from matplotlib import pyplot as plt
 from matplotlib import cm
@@ -73,7 +76,7 @@ def scatterplot_cluster(data: Union[np.ndarray, List[np.ndarray]],
 
         # scatterplot for each color
         for lbl in np.unique(labels_i):
-            ax_i.scatter(x=data_i[:, 0][labels_i == lbl], y=data_i[:, 1][labels_i == lbl],
+            ax_i.scatter(x=data_i[labels_i == lbl, 0], y=data_i[labels_i == lbl, 1],
                          color=colormap(lbl), alpha=alpha_scatter,
                          marker=marker_map[lbl], label=None)
 
@@ -122,6 +125,88 @@ def scatterplot_cluster(data: Union[np.ndarray, List[np.ndarray]],
             ax_i.set_title(f"Client #{i}")
 
     return fig, ax
+
+
+def one_vs_all_labels(original_labels: np.ndarray, selected_label, other_label=0, self_label=1) -> np.ndarray:
+    ova = np.full_like(original_labels, fill_value=other_label)
+    ova[original_labels == selected_label] = self_label
+    return ova
+
+
+def get_closest_samples_to_centers(centers: np.ndarray, labels: List[np.ndarray], samples: List[np.ndarray]) -> Dict[int, List[Optional[np.ndarray]]]:
+    """For each client and cluster center, select the sample nearest to the cluster center"""
+    closest_samples: Dict[int, List[Optional[np.ndarray]]] = {}
+
+    for k in range(0, centers.shape[0]):
+        k_center = centers[k, :]
+        k_closest = []
+        for i in range(len(labels)):
+            i_labels = labels[i]
+            if k in i_labels:
+                ki_samples = samples[i][i_labels == k]
+                dist = scipy.spatial.distance.cdist(ki_samples, k_center.reshape(1, -1), metric="euclidean")
+                k_closest.append(ki_samples[np.argmin(dist), :])
+            else:
+                k_closest.append(None)
+        closest_samples[k] = k_closest
+
+    return closest_samples
+
+
+def save_summary_as_excel(fname: str,
+                          shap_cluster_centers: Dict[int, Optional[np.ndarray]],
+                          cluster_labels: np.ndarray,
+                          samples: pd.DataFrame,
+                          samples_raw: Optional[pd.DataFrame] = None,
+                          time_anom: Optional[np.ndarray] = None
+                          ) -> None:
+    """ Save results to an excel file.
+    - 1 Excel sheet for each cluster label. Only if there are samples for said cluster.
+    - Each sheet includes 2 (or 3 if samples_raw not None) tables and an image if time_anom is not None
+    """
+    img_io_objs = []  # List[io.BytesIO], only close after pd.ExcelWriter is closed.
+    with pd.ExcelWriter(fname) as writer:
+        for k, shap_center in shap_cluster_centers.items():
+            if shap_center is None:
+                continue
+
+            sheet_name = f"Cluster {k}"
+            row_cnt = 0
+
+            print(f"--- k={k} ---")
+            ova_labels = one_vs_all_labels(cluster_labels, k, other_label=0, self_label=1)
+
+            # shap
+            shap_series = pd.Series(shap_center, index=samples.columns, name="SHAP").sort_values(key=np.abs, ascending=False)
+            shap_series.to_excel(writer, startrow=row_cnt, startcol=0, sheet_name=sheet_name)
+            row_cnt += (shap_series.shape[0] + 1 + 2)
+
+            # images, if available:
+            if time_anom is not None:
+                fig, ax = plt.subplots()
+                ax.scatter(time_anom[ova_labels == 0, 0], time_anom[ova_labels == 0, 1], alpha=0.2, color="#619CFF", label="rest")
+                ax.scatter(time_anom[ova_labels == 1, 0], time_anom[ova_labels == 1, 1], alpha=0.2, color="#F8766D", label="self")
+                ax.legend()
+                ax.set_title(f"Samples from cluster {k} ({ova_labels.sum()})")
+                fig.tight_layout()
+                img_io = io.BytesIO()
+                fig.savefig(img_io, format="png")
+                writer.sheets[sheet_name].insert_image(1, 3, sheet_name, {"image_data": img_io})
+                plt.close(fig)
+                img_io_objs.append(img_io)
+
+            # samples
+            samples_k = samples.loc[ova_labels == 1].describe(include="all")
+            samples_k.to_excel(writer, startrow=row_cnt, startcol=0, sheet_name=sheet_name)
+            row_cnt += (samples_k.shape[0] + 1 + 2)
+
+            # samples raw if available
+            if samples_raw is not None:
+                samples_raw_k = samples_raw.loc[ova_labels == 1].describe(include="all")
+                samples_raw_k.to_excel(writer, startrow=row_cnt, startcol=0, sheet_name=sheet_name)
+
+    for img_io in img_io_objs:
+        img_io.close()
 
 
 def reconstruction_error(model, loss_function, samples):
@@ -271,6 +356,17 @@ fig.tight_layout()
 plt.show()
 
 
+# plot t/anom by each label
+for lbl in np.unique(centralized_unsupervised_labels):
+    print(f"--> lbl = {lbl}")
+    cmap = cm.get_cmap("jet", 2)
+    marker_map = {0: "o", 1: "^"}
+    fig, ax = scatterplot_cluster([np.column_stack((t[a.index], r[a.index])) for t, r, a in zip(results_container["clients_test_timestamps"], results_container["clients_test_results"], results_container["clients_anomalies"])],
+                                  np.split(one_vs_all_labels(centralized_unsupervised_labels, lbl), np.cumsum(list(map(lambda x: x.shape[0], results_container["clients_anomalies"])))),
+                                  cmap, marker_map, True, False, False)
+    fig.tight_layout()
+    plt.show()
+
 ########################
 # Federated Clustering #
 ########################
@@ -342,13 +438,13 @@ plt.show()
 
 gK = 24
 gKix = (np.array(list(k_fed_results.keys())) == gK).nonzero()[0][0]
-bestix = np.argmax(ari_scores[gKix])
+k_fed_results_best = k_fed_results[gK][np.argmax(ari_scores[gKix])]
 
 # visualize k-fed in the centralized setting: label the centralized data using the centers from the federated KMeans method.
 # fake KMeans
-fake_km = KMeans(n_clusters=gK, init=k_fed_results[gK][bestix]["centers"], n_init=1).fit(k_fed_results[gK][bestix]["centers"])
-assert np.all(np.isclose(k_fed_results[gK][bestix]["centers"], fake_km.cluster_centers_))
-fake_labels = np.concatenate(k_fed_results[gK][bestix]["labels"])
+fake_km = KMeans(n_clusters=gK, init=k_fed_results_best["centers"], n_init=1).fit(k_fed_results_best["centers"])
+assert np.all(np.isclose(k_fed_results_best["centers"], fake_km.cluster_centers_))
+fake_labels = np.concatenate(k_fed_results_best["labels"])
 cmap = cm.get_cmap("hsv", gK)
 marker_map = dict(zip(range(gK),
                       itertools.cycle("ov^<>spP*HXD")))
@@ -358,7 +454,103 @@ plt.show()
 
 # plot en t/anom
 fig, ax = scatterplot_cluster([np.column_stack((t[a.index], r[a.index])) for t, r, a in zip(results_container["clients_test_timestamps"], results_container["clients_test_results"], results_container["clients_anomalies"])],  # List[np.ndarray], for each ndarray column 0 = timestamp, column 1 = reconstruction error, only select samples considered anomalies
-                              k_fed_results[gK][bestix]["labels"],
+                              k_fed_results_best["labels"],
                               cmap, marker_map, True, False, False)
 fig.tight_layout()
 plt.show()
+
+
+# get the closest SHAP sample for each cluster center
+closest_samples = get_closest_samples_to_centers(k_fed_results_best["centers"], k_fed_results_best["labels"], clients_anomalies_shap_proc)
+
+# fig, ax = plt.subplots()
+# ax.scatter(x=centralized_shap_2d[:, 0], y=centralized_shap_2d[:, 1], alpha=0.33)
+
+# for k in range(0, gK):
+#     if closest_samples[k][0] is not None:
+#         ax.scatter(x=centralized_pca.transform(closest_samples[k][0].reshape(1, -1))[:, 0], y=centralized_pca.transform(closest_samples[k][0].reshape(1, -1))[:, 1], s=10, color="r", marker="o")
+#     if closest_samples[k][1] is not None:
+#         ax.scatter(x=centralized_pca.transform(closest_samples[k][1].reshape(1, -1))[:, 0], y=centralized_pca.transform(closest_samples[k][1].reshape(1, -1))[:, 1], s=10, color="b", marker="o")
+# ax.scatter(x=centralized_pca.transform(k_fed_results_best["centers"])[:, 0], y=centralized_pca.transform(k_fed_results_best["centers"])[:, 1], color="k", marker="x")
+# plt.show()
+
+# get original data, not shap.
+clients_dfs = results_container["clients_test_dfs"]
+clients_dfs_raw = list(map(pd.read_pickle, results_container["clients_test_data_path"]))
+feat_names = clients_dfs[0].columns
+feat_names_raw = clients_dfs_raw[0].columns
+# aligned with anomalous index
+clients_dfs_anom = [d.loc[a.index] for d, a in zip(results_container["clients_test_dfs"], results_container["clients_anomalies"])]
+clients_dfs_raw_anom = [d.loc[a.index] for d, a in zip(list(map(pd.read_pickle, results_container["clients_test_data_path"])), results_container["clients_anomalies"])]
+clients_recerror_anom = [r[a.index] for r, a in zip(results_container["clients_test_results"], results_container["clients_anomalies"])]
+clients_timestamp_anom = [t[a.index] for t, a in zip(results_container["clients_test_timestamps"], results_container["clients_anomalies"])]
+
+
+# Results, SHAP and sample summary for each cluster
+for i in range(num_clients):
+    save_summary_as_excel(f"client-{i}.xlsx", {k: v[i] for k, v in closest_samples.items()},
+                          k_fed_results_best["labels"][i],
+                          clients_dfs_anom[i],
+                          clients_dfs_raw_anom[i],
+                          np.column_stack((clients_timestamp_anom[i], clients_recerror_anom[i])))
+
+# Results, Trees
+# Include here the normal samples (label normal samples as gK)
+clients_fed_labels = [np.full(cdf.shape[0], gK) for cdf in clients_dfs]
+for x, a, l in zip(clients_fed_labels, results_container["clients_anomalies"], k_fed_results_best["labels"]):
+    np.put(x, a.index, l)
+
+# multi class anomalies
+for i in range(num_clients):
+    print(f"--- Client #{i} ---")
+    clf = tree.DecisionTreeClassifier().fit(clients_dfs[i], clients_fed_labels[i])
+    print(clf.score(clients_dfs[i], clients_fed_labels[i]))
+    print(tree.export_text(clf, feature_names=list(feat_names), decimals=3, show_weights=True))
+    tree.plot_tree(clf, feature_names=feat_names, class_names=[f"Cluster {i}" for i in np.unique(clients_fed_labels[i])], filled=True)
+    plt.show()
+
+# one vs all
+for i in range(num_clients):
+    print(f"--- Client #{i} ---")
+    for k in np.unique(clients_fed_labels[i]):
+        if k == gK:
+            continue
+        print(f"\tk = {k}")
+        ova_i_k = one_vs_all_labels(clients_fed_labels[i], k, other_label=-1, self_label=1)
+        clf = tree.DecisionTreeClassifier().fit(clients_dfs[i], ova_i_k)
+        print("\t", clf.score(clients_dfs[i], ova_i_k))
+        print(tree.export_text(clf, feature_names=list(feat_names), decimals=3, show_weights=True))
+        tree.plot_tree(clf, feature_names=feat_names, class_names=["other", "self"], filled=True)
+        plt.show()
+
+# Random forest with limited number of trees and restricted depth
+
+
+# ~~~ ignore ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# i_ = 0
+# c_ = 7
+# ova_labels = one_vs_all_labels(clients_fed_labels[i_], c_)
+
+# clf = RandomForestClassifier(n_estimators=5, max_depth=2, bootstrap=False).fit(clients_dfs[i_], ova_labels)
+# print(clf.score(clients_dfs[i_], ova_labels))
+# print(pd.Series(clf.feature_importances_, index=feat_names).sort_values(ascending=False).head(10))
+# for estimator in clf.estimators_:
+#     fig, ax = plt.subplots()
+#     tree.plot_tree(estimator, feature_names=feat_names, class_names=["other", "self"], ax=ax)
+#     plt.show()
+
+
+# ~~~ ignore ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# clf = xgb.XGBClassifier(nthread=1, max_depth=3).fit(clients_dfs[i_], ova_labels)
+# print(pd.Series(clf.feature_importances_, index=clients_dfs[i_].columns).sort_values(ascending=False).head(10))
+# xgb.plot_tree(clf); plt.show()
+
+# query_labels = clients_dfs[i_].eval("sport_httpPorts>=1")
+# manual_labels = np.full(query_labels.shape, 0)
+# manual_labels[query_labels] = 1
+# print(accuracy_score(manual_labels, ova_labels))
+# neq = np.not_equal(manual_labels, ova_labels)
+# manual_labels[neq] = 2
+# sns.scatterplot(x=clients_timestamp[i_], y=clients_recerror[i_], hue=manual_labels.astype(str), linewidth=0, s=8, alpha=0.6); plt.show()
