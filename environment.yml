@@ -16,6 +16,8 @@ dependencies:
   - shap=0.41.*
   - hdbscan=0.8.*
   - umap-learn=0.5.*
+  - scapy=2.4.*
+  - xlsxwriter
   - pip
   - pip:
     - git+https://github.com/xsaga/kfed-rounded.git
