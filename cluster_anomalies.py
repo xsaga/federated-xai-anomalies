@@ -4,6 +4,7 @@ import argparse
 import io
 import itertools
 import pickle
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Union, Optional
 
@@ -231,6 +232,9 @@ parser.add_argument("-l", "--labels", type=lambda p: Path(p).absolute(), nargs="
                     help="Manual labelling data.")
 
 args = parser.parse_args()
+
+OUTPUT_DIR = Path(f"results_{datetime.now().strftime('%Y_%m_%dT%H_%M_%S')}")
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 #############
 # Load data #
@@ -488,7 +492,8 @@ clients_timestamp_anom = [t[a.index] for t, a in zip(results_container["clients_
 
 # Results, SHAP and sample summary for each cluster
 for i in range(num_clients):
-    save_summary_as_excel(f"client-{i}.xlsx", {k: v[i] for k, v in closest_samples.items()},
+    save_summary_as_excel(OUTPUT_DIR / f"client-{i}.xlsx",
+                          {k: v[i] for k, v in closest_samples.items()},
                           k_fed_results_best["labels"][i],
                           clients_dfs_anom[i],
                           clients_dfs_raw_anom[i],
@@ -510,35 +515,59 @@ for i in range(num_clients):
     plt.show()
 
 # one vs all
-for i in range(num_clients):
-    print(f"--- Client #{i} ---")
-    for k in np.unique(clients_fed_labels[i]):
-        if k == gK:
-            continue
-        print(f"\tk = {k}")
-        ova_i_k = one_vs_all_labels(clients_fed_labels[i], k, other_label=-1, self_label=1)
-        clf = tree.DecisionTreeClassifier().fit(clients_dfs[i], ova_i_k)
-        print("\t", clf.score(clients_dfs[i], ova_i_k))
-        print(tree.export_text(clf, feature_names=list(feat_names), decimals=3, show_weights=True))
-        tree.plot_tree(clf, feature_names=feat_names, class_names=["other", "self"], filled=True)
-        plt.show()
+with open(OUTPUT_DIR / "ova_tree_results.html", "w") as tree_outfile:
+    tree_outfile.write("<!DOCTYPE html>\n<html>\n<body>\n<h1>One vs all decision tree classifiers</h1>\n")
+    tree_plot_outdir = OUTPUT_DIR / "trees"
+    tree_plot_outdir.mkdir(parents=True, exist_ok=True)
+    for i in range(num_clients):
+        print(f"--- Client #{i} ---")
+        tree_outfile.write(f"<h2>Client #{i}</h2>\n")
+        for k in np.unique(clients_fed_labels[i]):
+            if k == gK:
+                continue
+            print(f"\tk = {k}")
+            ova_i_k = one_vs_all_labels(clients_fed_labels[i], k, other_label=-1, self_label=1)
+            tree_outfile.write(f"<h3>Client #{i}, Cluster k = {k} ({np.count_nonzero(ova_i_k==1)})</h3>\n")
+            clf = tree.DecisionTreeClassifier(max_depth=4).fit(clients_dfs[i], ova_i_k)
+            clf_txt = tree.export_text(clf, feature_names=list(feat_names), decimals=3, show_weights=True)
+            print("\t", clf.score(clients_dfs[i], ova_i_k))
+            print(clf_txt)
+            fig, ax = plt.subplots()
+            tree.plot_tree(clf, feature_names=feat_names, class_names=["other", "self"], filled=True, ax=ax)
+            # Or, savefig to StringIO and embedd it directly in the html.
+            tree_plot_outfile = tree_plot_outdir / f"ova_tree_c{i}_k{k}.svg"
+            fig.savefig(tree_plot_outfile, format="svg")
+            plt.close(fig)
+            tree_outfile.write(f"<img src='{tree_plot_outfile.relative_to(OUTPUT_DIR)}' alt='tree for client {i} cluster {k}'>\n")
+            tree_outfile.write(f"<pre>\n{clf_txt}\n</pre>\n")
+    tree_outfile.write("</body>\n</html>\n")
 
 # Random forest with limited number of trees and restricted depth
-
-
-# ~~~ ignore ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-# i_ = 0
-# c_ = 7
-# ova_labels = one_vs_all_labels(clients_fed_labels[i_], c_)
-
-# clf = RandomForestClassifier(n_estimators=5, max_depth=2, bootstrap=False).fit(clients_dfs[i_], ova_labels)
-# print(clf.score(clients_dfs[i_], ova_labels))
-# print(pd.Series(clf.feature_importances_, index=feat_names).sort_values(ascending=False).head(10))
-# for estimator in clf.estimators_:
-#     fig, ax = plt.subplots()
-#     tree.plot_tree(estimator, feature_names=feat_names, class_names=["other", "self"], ax=ax)
-#     plt.show()
+# worse than a regular decision tree classifier
+with open(OUTPUT_DIR / "ova_forest_results.html", "w") as forest_outfile:
+    forest_outfile.write("<!DOCTYPE html>\n<html>\n<body>\n<h1>One vs all random forest classifiers</h1>\n")
+    forest_plot_outdir = OUTPUT_DIR / "forest"
+    forest_plot_outdir.mkdir(parents=True, exist_ok=True)
+    for i in range(num_clients):
+        print(f"--- Client #{i} ---")
+        forest_outfile.write(f"<h2>Client #{i}</h2>\n")
+        for k in np.unique(clients_fed_labels[i]):
+            if k == gK:
+                continue
+            print(f"\tk = {k}")
+            ova_i_k = one_vs_all_labels(clients_fed_labels[i], k, other_label=-1, self_label=1)
+            forest_outfile.write(f"<h3>Client #{i}, Cluster k = {k} ({np.count_nonzero(ova_i_k==1)})</h3>\n")
+            clf = RandomForestClassifier(n_estimators=5, max_depth=2, bootstrap=True).fit(clients_dfs[i], ova_i_k)
+            print("\t", clf.score(clients_dfs[i], ova_i_k))
+            for e, estimator in enumerate(clf.estimators_):
+                forest_outfile.write(f"<h4>Client #{i}, Cluster k = {k} ({np.count_nonzero(ova_i_k==1)}), estimator {e}</h4>\n")
+                fig, ax = plt.subplots()
+                tree.plot_tree(estimator, feature_names=feat_names, class_names=["other", "self"], filled=True, ax=ax)
+                forest_plot_outfile = forest_plot_outdir / f"ova_forest_c{i}_k{k}_e{e}.svg"
+                fig.savefig(forest_plot_outfile, format="svg")
+                plt.close(fig)
+                forest_outfile.write(f"<img src='{forest_plot_outfile.relative_to(OUTPUT_DIR)}' alt='forest for client {i} cluster {k} estimator {e}'>\n")
+    forest_outfile.write("</body>\n</html>\n")
 
 
 # ~~~ ignore ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
