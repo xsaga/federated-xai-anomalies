@@ -12,6 +12,17 @@
 *.pickle
 *.tar
 *.xlsx
+data/
+results_*/
+archive.ics.uci.edu/
+args.txt
+ipython-history-file-with-outputs.txt
+ipython-history-file.txt
+*_nbaiot_ae.pt
+
+# python scripts from other project
+model_ae.py
+feature_extractor.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
