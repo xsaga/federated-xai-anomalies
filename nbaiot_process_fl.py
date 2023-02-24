@@ -11,6 +11,7 @@ from typing import Tuple, List, Dict
 
 from sklearn.model_selection import train_test_split
 from sklearn import preprocessing
+from sklearn.metrics import accuracy_score, confusion_matrix, f1_score, matthews_corrcoef
 
 import torch
 import torch.nn as nn
@@ -238,6 +239,18 @@ def main(nbaiot_data_basepath: Path, nbaiot_devices_names: List[str], fl_rounds:
 
         for dm in data_mal:
             dm["data"] = global_transformer.transform(dm["data"])
+
+        # scores (TODO: include also data from benign validation)
+        for dm in data_mal:
+            results = global_model.predict_samples(torch.from_numpy(dm["data"]))
+            labels_pred = (results > all_threshold[dev_idx]) + 0
+            labels_gnd_truth = np.ones(dm["data"].shape[0], dtype=np.int32)
+            print(confusion_matrix(labels_gnd_truth, labels_pred, labels=[1, 0]))  # 0:normal, 1:attack; positive class is attack
+            tp, fn, fp, tn = confusion_matrix(labels_gnd_truth, labels_pred, labels=[1, 0]).ravel()
+            print("tp, fn, fp, tn = ", tp, ",", fn, ",", fp, ",", tn)
+            print("Accuracy: ", accuracy_score(labels_gnd_truth, labels_pred))
+            print("F1: ", f1_score(labels_gnd_truth, labels_pred, pos_label=1))
+            print("MCC: ", matthews_corrcoef(labels_gnd_truth, labels_pred))
 
         # visualize
         fig, ax = plt.subplots(nrows=int(np.ceil((len(data_mal)) / (np.ceil(np.sqrt(len(data_mal)))))),
