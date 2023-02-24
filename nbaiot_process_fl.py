@@ -29,11 +29,23 @@ def read_nbaiot_data(path: str) -> pd.DataFrame:
 
 def read_nbaiot_multiple_fromdir(path: str) -> List[Dict[str, pd.DataFrame]]:
     assert path.is_dir()
+
+    dev_name_map = {"Danmini_Doorbell": "Danmini",
+                    "Ecobee_Thermostat": "Ecobee",
+                    "Ennio_Doorbell": "Ennio",
+                    "Philips_B120N10_Baby_Monitor": "Philips_B120N10",
+                    "Provision_PT_737E_Security_Camera": "Provision_PT_737E",
+                    "Provision_PT_838_Security_Camera": "Provision_PT_838",
+                    "Samsung_SNH_1011_N_Webcam": "Samsung_SNH_1011_N",
+                    "SimpleHome_XCS7_1002_WHT_Security_Camera": "SimpleHome_XCS7_1002_WHT",
+                    "SimpleHome_XCS7_1003_WHT_Security_Camera": "SimpleHome_XCS7_1003_WHT"}
+
     csv_files = path.glob("*.csv")
+    dev_name = dev_name_map[path.parent.name]
     all_data = []
     for csv_file in csv_files:
-        print(f"reading: {path.name} / {csv_file.name}")
-        all_data.append({"name": f"{path.name.split('_')[0]}_{csv_file.stem}",
+        print(f"reading: {dev_name} / {path.name} / {csv_file.name}")
+        all_data.append({"name": f"{dev_name}_{path.name.split('_')[0]}_{csv_file.stem}",
                          "data": read_nbaiot_data(csv_file)})
     return all_data
 
@@ -230,6 +242,7 @@ def main(nbaiot_data_basepath: Path, nbaiot_devices_names: List[str], fl_rounds:
             fig.savefig(f"1_mse_dataset_optim_fl_client_{i}.png", format="png")
 
     # load evaluation data
+    ## total_mal_cnt = 0
     for dev_idx, dev in enumerate(nbaiot_devices_names):
         data_mal = read_nbaiot_multiple_fromdir(DATA_BASEPATH / dev / GAFGYT_BASEDIR)
 
@@ -266,7 +279,8 @@ def main(nbaiot_data_basepath: Path, nbaiot_devices_names: List[str], fl_rounds:
             fig.savefig(f"2_mse_attacks_fl_client_{dev_idx}.png", format="png")
 
         # generate labels
-        label_map = {x["name"]: i for i, x in enumerate(data_mal)}
+        label_map = {x["name"]: i for i, x in enumerate(data_mal)}  ## , start=total_mal_cnt
+        ## total_mal_cnt += max(label_map.values())+1
         data_labels = []
         for dm in data_mal:
             lbl = dm["name"]

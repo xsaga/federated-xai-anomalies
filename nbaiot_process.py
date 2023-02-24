@@ -25,11 +25,23 @@ def read_nbaiot_data(path: str) -> pd.DataFrame:
 
 def read_nbaiot_multiple_fromdir(path: str) -> List[Dict[str, pd.DataFrame]]:
     assert path.is_dir()
+
+    dev_name_map = {"Danmini_Doorbell": "Danmini",
+                    "Ecobee_Thermostat": "Ecobee",
+                    "Ennio_Doorbell": "Ennio",
+                    "Philips_B120N10_Baby_Monitor": "Philips_B120N10",
+                    "Provision_PT_737E_Security_Camera": "Provision_PT_737E",
+                    "Provision_PT_838_Security_Camera": "Provision_PT_838",
+                    "Samsung_SNH_1011_N_Webcam": "Samsung_SNH_1011_N",
+                    "SimpleHome_XCS7_1002_WHT_Security_Camera": "SimpleHome_XCS7_1002_WHT",
+                    "SimpleHome_XCS7_1003_WHT_Security_Camera": "SimpleHome_XCS7_1003_WHT"}
+
     csv_files = path.glob("*.csv")
+    dev_name = dev_name_map[path.parent.name]
     all_data = []
     for csv_file in csv_files:
-        print(f"reading: {path.name} / {csv_file.name}")
-        all_data.append({"name": f"{path.name.split('_')[0]}_{csv_file.stem}",
+        print(f"reading: {dev_name} / {path.name} / {csv_file.name}")
+        all_data.append({"name": f"{dev_name}_{path.name.split('_')[0]}_{csv_file.stem}",
                          "data": read_nbaiot_data(csv_file)})
     return all_data
 
