@@ -357,7 +357,7 @@ if args.umap:
 # https://hdbscan.readthedocs.io/en/latest/parameter_selection.html (cluster_selection_epsilon)
 # https://hdbscan.readthedocs.io/en/latest/how_to_use_epsilon.html
 # centralized_clusterer = hdbscan.HDBSCAN(min_cluster_size=100, min_samples=1)
-centralized_clusterer = hdbscan.HDBSCAN(min_cluster_size=100, min_samples=1, cluster_selection_epsilon=0.01, cluster_selection_method="eom")
+centralized_clusterer = hdbscan.HDBSCAN(min_cluster_size=300, min_samples=1, cluster_selection_epsilon=0.05, cluster_selection_method="eom")  # 100, 1, 0.01
 centralized_clusterer.fit(centralized_pca.transform(centralized_anomalies_shap_proc))
 centralized_unsupervised_labels = centralized_clusterer.labels_
 print(np.unique(centralized_unsupervised_labels, return_counts=True))
@@ -399,7 +399,7 @@ for i in range(num_clients):
     print(f"Client #{i}", end="", flush=True)
     c_pca = PCA(n_components=0.99).fit(clients_anomalies_shap_proc[i])
     print(".", end="", flush=True)
-    clus = hdbscan.HDBSCAN(min_cluster_size=100, min_samples=1, cluster_selection_epsilon=0.01, cluster_selection_method="eom", allow_single_cluster=True)
+    clus = hdbscan.HDBSCAN(min_cluster_size=300, min_samples=1, cluster_selection_epsilon=0.05, cluster_selection_method="eom", allow_single_cluster=True)
     clus.fit(c_pca.transform(clients_anomalies_shap_proc[i]))
     print(": ", end="", flush=True)
     k_p = clus.labels_.max() + 1  # ignore outliers
