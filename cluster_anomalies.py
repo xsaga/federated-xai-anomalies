@@ -254,6 +254,19 @@ args = parser.parse_args()
 OUTPUT_DIR = Path(f"results_{datetime.now().strftime('%Y_%m_%dT%H_%M_%S')}")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
+# general matplotlib config
+rcParams["font.family"] = ["Times New Roman"]
+rcParams["font.size"] = 8
+rcParams["xtick.labelsize"] = 8
+rcParams["ytick.labelsize"] = 8
+rcParams["axes.labelsize"] = 8
+rcParams["legend.fontsize"] = 8
+# rcParams["lines.linewidth"] = 0.75
+# rcParams["lines.markersize"] = 2
+plot_width = 3.487  # in
+plot_height = 2.325  # 2.155
+
+
 #############
 # Load data #
 #############
@@ -274,12 +287,14 @@ for i in range(num_clients):
     lab = clients_labels[i]
     clients_anomalies_labels.append(lab.iloc[idx])
 
+# clients_anomalies_labels[1]["type"][clients_anomalies_labels[1]["type"] == "Victim"] = "Victim CoAP"
+
 clients_anomalies_shap = results_container["clients_anomalies_shap"]
 
 # centralized shap values
 centralized_anomalies_shap = np.concatenate(clients_anomalies_shap)
 centralized_anomalies_client_label = np.concatenate([np.full(clients_anomalies_shap[i].shape[0], i) for i in range(num_clients)])
-centralized_anomalies_labels = np.concatenate([f"C{i}-" + clients_anomalies_labels[i]["type"] for i in range(num_clients)])
+centralized_anomalies_labels = np.concatenate([clients_anomalies_labels[i]["type"] for i in range(num_clients)])
 
 # preprocess shap values
 clients_anomalies_shap_proc = list(map(preprocessing.normalize, clients_anomalies_shap))
@@ -293,7 +308,7 @@ centralized_anomalies_shap_proc = preprocessing.normalize(centralized_anomalies_
 fig, ax = plt.subplots(nrows=int(np.ceil(num_clients / 2)), ncols=2)
 for i in range(num_clients):
     c_shap_2d = PCA(n_components=2).fit_transform(clients_anomalies_shap_proc[i])
-    sns.scatterplot(x=c_shap_2d[:, 0], y=c_shap_2d[:, 1], hue=clients_anomalies_labels[i]["type"], linewidth=0, alpha=0.33, ax=ax.flatten()[i], rasterized=True)
+    sns.scatterplot(x=c_shap_2d[:, 0], y=c_shap_2d[:, 1], hue=clients_anomalies_labels[i]["type"], palette="deep", linewidth=0, alpha=0.33, ax=ax.flatten()[i], rasterized=True)
     ax.flatten()[i].set_title(f"Client #{i}")
 fig.tight_layout()
 plt.show()
@@ -302,7 +317,7 @@ if args.umap:
     fig, ax = plt.subplots(nrows=int(np.ceil(num_clients / 2)), ncols=2)
     for i in range(num_clients):
         c_shap_2d = UMAP().fit_transform(clients_anomalies_shap_proc[i])
-        sns.scatterplot(x=c_shap_2d[:, 0], y=c_shap_2d[:, 1], hue=clients_anomalies_labels[i]["type"], linewidth=0, alpha=0.33, ax=ax.flatten()[i], rasterized=True)
+        sns.scatterplot(x=c_shap_2d[:, 0], y=c_shap_2d[:, 1], hue=clients_anomalies_labels[i]["type"], palette="deep", linewidth=0, alpha=0.33, ax=ax.flatten()[i], rasterized=True)
         ax.flatten()[i].set_title(f"Client #{i}")
     fig.tight_layout()
     plt.show()
@@ -319,14 +334,28 @@ centralized_shap_2d = centralized_pca.transform(centralized_anomalies_shap_proc)
 
 # visualize: centralized 2d projection shap values, colorized by client
 fig, ax = plt.subplots()
-sns.scatterplot(x=centralized_shap_2d[:, 0], y=centralized_shap_2d[:, 1], hue=centralized_anomalies_client_label, linewidth=0, alpha=0.33, ax=ax)
+sns.scatterplot(x=centralized_shap_2d[:, 0], y=centralized_shap_2d[:, 1], hue=centralized_anomalies_client_label, palette="deep", linewidth=0, alpha=0.33, ax=ax)
 plt.show()
 
 # visualize: centralized 2d projection shap values, colorized by manual label
 fig, ax = plt.subplots()
-sns.scatterplot(x=centralized_shap_2d[:, 0], y=centralized_shap_2d[:, 1], hue=centralized_anomalies_labels,
+sns.scatterplot(x=centralized_shap_2d[:, 0], y=centralized_shap_2d[:, 1], hue=centralized_anomalies_labels, palette="deep",
                 style=centralized_anomalies_client_label, linewidth=0, alpha=0.33, ax=ax)
 plt.show()
+
+# visualize: final
+_cent_pca_df = pd.DataFrame({"principal component 1": centralized_shap_2d[:, 0],
+                             "principal component 2": centralized_shap_2d[:, 1],
+                             "Label": centralized_anomalies_labels,
+                             "Client": centralized_anomalies_client_label})
+fig, ax = plt.subplots()
+sns.scatterplot(data=_cent_pca_df, x="principal component 1", y="principal component 2",
+                hue="Label", palette="deep", edgecolor="none", alpha=0.1, s=1, rasterized=True, ax=ax)  # , style="Client", s=5
+sns.move_legend(ax, "upper left", bbox_to_anchor=(0.98, 1), fancybox=False, frameon=False, borderpad=0.0, handletextpad=0.0, fontsize=6)
+fig.set_size_inches(plot_width, plot_height)
+fig.tight_layout()
+fig.savefig(f"{args.input.stem}_centralized_shap_pca_2d.pdf", format="pdf")
+# plt.show()
 
 # pca explained variance
 fig, ax = plt.subplots()
@@ -334,16 +363,39 @@ ax.plot(np.arange(centralized_pca.n_components_) + 1, np.cumsum(centralized_pca.
 plt.show()
 
 if args.umap:
-    centralized_shap_2d_umap = UMAP().fit_transform(centralized_anomalies_shap_proc)
+    centralized_umap = UMAP(random_state=42)  # UMAP(random_state=42) Setting a random state disables non-reproducible multi-threading and can take longer!
+    centralized_shap_2d_umap = centralized_umap.fit_transform(centralized_anomalies_shap_proc)
+
+    # save (for large sets, UMAP can take hours)
+    np.save(args.input.stem + "_2d_umap.npy", centralized_shap_2d_umap)
+    joblib.dump(centralized_umap, args.input.stem + "_UMAP_obj.gz")
+    # centralized_shap_2d_umap = np.load(args.input.stem + "_2d_umap.npy")
+    # centralized_umap = joblib.load(args.input.stem + "_UMAP_obj.gz")
+
 
     fig, ax = plt.subplots()
-    sns.scatterplot(x=centralized_shap_2d_umap[:, 0], y=centralized_shap_2d_umap[:, 1], hue=centralized_anomalies_client_label, linewidth=0, alpha=0.33, ax=ax)
+    sns.scatterplot(x=centralized_shap_2d_umap[:, 0], y=centralized_shap_2d_umap[:, 1], hue=centralized_anomalies_client_label, palette="deep", linewidth=0, alpha=0.33, ax=ax)
     plt.show()
 
     fig, ax = plt.subplots()
-    sns.scatterplot(x=centralized_shap_2d_umap[:, 0], y=centralized_shap_2d_umap[:, 1], hue=centralized_anomalies_labels,
+    sns.scatterplot(x=centralized_shap_2d_umap[:, 0], y=centralized_shap_2d_umap[:, 1], hue=centralized_anomalies_labels, palette="deep",
                     style=centralized_anomalies_client_label, linewidth=0, alpha=0.33, ax=ax)
     plt.show()
+
+    # final
+    _cent_umap_df = pd.DataFrame({"UMAP embedding 1": centralized_shap_2d_umap[:, 0],
+                                  "UMAP embedding 2": centralized_shap_2d_umap[:, 1],
+                                  "Label": centralized_anomalies_labels,
+                                  "Client": centralized_anomalies_client_label})
+    fig, ax = plt.subplots()
+    sns.scatterplot(data=_cent_umap_df, x="UMAP embedding 1", y="UMAP embedding 2",
+                    hue="Label", palette="deep", edgecolor="none", alpha=0.1, s=1, rasterized=True, ax=ax)  # , style="Client", s=5
+    sns.move_legend(ax, "upper left", bbox_to_anchor=(0.98, 1), fancybox=False, frameon=False, borderpad=0.0, handletextpad=0.0, fontsize=6)
+    fig.set_size_inches(plot_width, plot_height)
+    fig.tight_layout()
+    fig.savefig(f"{args.input.stem}_centralized_shap_umap_2d.pdf", format="pdf")
+    # plt.show()
+
 
 
 ##########################
