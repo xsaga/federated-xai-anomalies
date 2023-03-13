@@ -29,9 +29,11 @@ from sklearn import tree
 
 from matplotlib import pyplot as plt
 from matplotlib import cm
+from matplotlib import rcParams
 import seaborn as sns
 
 from fkms.algorithms import kfed
+from federated_clustering_validation import calinski_harabasz as fed_ch
 
 
 def points_in_circle_around(x0, y0, r, steps=10):
@@ -454,9 +456,44 @@ fig, ax = plt.subplots()
 sns.boxplot(data=metrics_df, x="num_clusters", y="score", hue="metric", ax=ax)
 plt.show()
 
-gK = 24
-gKix = (np.array(list(k_fed_results.keys())) == gK).nonzero()[0][0]
-k_fed_results_best = k_fed_results[gK][np.argmax(ari_scores[gKix])]
+
+# boxplot ARI centralized
+fig, ax = plt.subplots()
+ax.boxplot(ari_df.drop(columns=["metric"]).to_numpy(),
+           labels=list(ari_df.drop(columns=["metric"]).columns), positions=list(ari_df.drop(columns=["metric"]).columns),
+           capprops=dict(color="black", linewidth=1))
+ax.hlines(y=1.0, xmin=k_p, xmax=(k_p * num_clients)-1, colors="silver", linestyles="dotted")
+ax.set_xlabel("number of global clusters")
+ax.set_ylabel("adjusted Rand score")
+fig.set_size_inches(plot_width, plot_height)
+fig.tight_layout()
+fig.savefig(f"{args.input.stem}_ari_fl_centralized.pdf", format="pdf")
+# plt.show()
+
+
+# unsupervised federated clustering quality metrics
+k_fed_cluster_quality = {}
+for k, v in k_fed_results.items():
+    k_fed_cluster_quality[k] = [fed_ch.calinski_harabasz_score_federated(clients_anomalies_shap_proc, x["labels"], x["centers"]) for x in v]
+k_fed_cluster_quality = pd.DataFrame(k_fed_cluster_quality)
+
+# boxplot federated unsupervised
+fig, ax = plt.subplots()
+ax.boxplot(k_fed_cluster_quality.to_numpy(),
+           labels=k_fed_cluster_quality.columns, positions=k_fed_cluster_quality.columns,
+           capprops=dict(color="black", linewidth=1))
+ax.set_xlabel("number of global clusters")
+ax.set_ylabel("Calinski-Harabasz score")
+fig.set_size_inches(plot_width, plot_height)
+fig.tight_layout()
+fig.savefig(f"{args.input.stem}_CHscore_fl.pdf", format="pdf")
+# plt.show()
+
+
+gK = 22  #24
+# gKix = (np.array(list(k_fed_results.keys())) == gK).nonzero()[0][0]
+# k_fed_results_best = k_fed_results[gK][np.argmax(ari_scores[gKix])]
+k_fed_results_best = k_fed_results[gK][np.argmax(k_fed_cluster_quality[gK])]
 
 # visualize k-fed in the centralized setting: label the centralized data using the centers from the federated KMeans method.
 # fake KMeans
