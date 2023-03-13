@@ -128,6 +128,20 @@ def scatterplot_cluster(data: Union[np.ndarray, List[np.ndarray]],
     return fig, ax
 
 
+def make_table_client_clusters(clients_names: List[str], clients_labels: List[np.ndarray], percent=True, round_decimals=2, zeros_are_nan=True) -> pd.DataFrame:
+    assert len(clients_names) == len(clients_labels)
+    all_uniq_labels = np.unique(np.concatenate(clients_labels))
+    results = {}
+    for name, labels in zip(clients_names, clients_labels):
+        counts = np.array([np.count_nonzero(labels == l) for l in all_uniq_labels], dtype=np.float32)
+        if zeros_are_nan:
+            counts[counts == 0] = np.nan
+        if percent:
+            counts = np.around((counts / np.nansum(counts))*100, decimals=round_decimals)
+        results[name] = counts
+    return pd.DataFrame(results, index=all_uniq_labels).T
+
+
 def one_vs_all_labels(original_labels: np.ndarray, selected_label, other_label=0, self_label=1) -> np.ndarray:
     ova = np.full_like(original_labels, fill_value=other_label)
     ova[original_labels == selected_label] = self_label
@@ -463,6 +477,13 @@ fig, ax = scatterplot_cluster([np.column_stack((t[a.index], r[a.index])) for t, 
 fig.tight_layout()
 plt.show()
 
+# table
+table_client_cluster = make_table_client_clusters([p.stem for p in args.labels],
+                                                  k_fed_results_best["labels"])
+with pd.option_context("display.max_rows", None, "display.max_columns", None, "display.float_format", "{:.2f}".format):
+    print(table_client_cluster)
+table_client_cluster.to_latex(buf=f"{args.input.stem}_fed_kmeans_cluster_table.tex",
+                              na_rep="-", float_format="%.2f")
 
 # get the closest SHAP sample for each cluster center
 closest_samples = get_closest_samples_to_centers(k_fed_results_best["centers"], k_fed_results_best["labels"], clients_anomalies_shap_proc)
