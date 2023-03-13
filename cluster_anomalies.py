@@ -4,10 +4,12 @@ import argparse
 import io
 import itertools
 import pickle
+import random
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Union, Optional
 
+import joblib
 import numpy as np
 import pandas as pd
 import torch
@@ -407,7 +409,9 @@ for i in range(num_clients):
 k_p = max(clients_k_p)
 print(f"Final k' = {k_p}")
 
-k_fed_repetitions = 10
+np.random.seed(10)
+random.seed(10)
+k_fed_repetitions = 30
 k_fed_results: Dict[int, List[Dict[str, Union[np.ndarray, List[np.ndarray]]]]] = {}
 #                   ^ k-fed global k
 #                        ^ list of length k_fed_repetitions
@@ -430,7 +434,7 @@ for k in range(k_p, k_p * num_clients):
         rep_k.append({"centers": federated_centers, "labels": k_fed_labels})
     k_fed_results[k] = rep_k
 
-
+# compare clustering quality with centralized
 ari_scores = []
 ami_scores = []
 vme_scores = []
