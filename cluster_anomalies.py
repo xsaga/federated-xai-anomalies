@@ -486,6 +486,9 @@ for k in range(k_p, k_p * num_clients):
         rep_k.append({"centers": federated_centers, "labels": k_fed_labels})
     k_fed_results[k] = rep_k
 
+joblib.dump(k_fed_results, args.input.stem + "_k_fed_results.gz")
+# k_fed_results = joblib.load(args.input.stem + "_k_fed_results.gz")
+
 # compare clustering quality with centralized
 ari_scores = []
 ami_scores = []
@@ -515,12 +518,13 @@ plt.show()
 
 # boxplot ARI centralized
 fig, ax = plt.subplots()
+# lll = [(l if l%4==0 else "") for l in list(ari_df.drop(columns=["metric"]).columns)]  # labels=lll
 ax.boxplot(ari_df.drop(columns=["metric"]).to_numpy(),
            labels=list(ari_df.drop(columns=["metric"]).columns), positions=list(ari_df.drop(columns=["metric"]).columns),
            capprops=dict(color="black", linewidth=1))
 ax.hlines(y=1.0, xmin=k_p, xmax=(k_p * num_clients)-1, colors="silver", linestyles="dotted")
-ax.set_xlabel("number of global clusters")
-ax.set_ylabel("adjusted Rand score")
+ax.set_xlabel("Number of global clusters")
+ax.set_ylabel("Adjusted Rand score")
 fig.set_size_inches(plot_width, plot_height)
 fig.tight_layout()
 fig.savefig(f"{args.input.stem}_ari_fl_centralized.pdf", format="pdf")
@@ -538,7 +542,7 @@ fig, ax = plt.subplots()
 ax.boxplot(k_fed_cluster_quality.to_numpy(),
            labels=k_fed_cluster_quality.columns, positions=k_fed_cluster_quality.columns,
            capprops=dict(color="black", linewidth=1))
-ax.set_xlabel("number of global clusters")
+ax.set_xlabel("Number of global clusters")
 ax.set_ylabel("Calinski-Harabasz score")
 fig.set_size_inches(plot_width, plot_height)
 fig.tight_layout()
