@@ -172,6 +172,25 @@ def get_closest_samples_to_centers(centers: np.ndarray, labels: List[np.ndarray]
     return closest_samples
 
 
+def heatmap_shap_cluster_client(client_idx: int, shap_closest_samples_center: Dict[int, List[Optional[np.ndarray]]], feature_names: List[str]):
+    """Plot heatmap of shap values / cluster / client"""
+    fig, ax = plt.subplots()
+
+    shap_clus_values = []
+    cluster_names = []
+
+    for c, v in shap_closest_samples_center.items():
+        if v[client_idx] is None:
+            continue
+        shap_clus_values.append(v[client_idx])
+        cluster_names.append(f"C{c}")
+
+    shap_clus_values = np.array(shap_clus_values)
+    sns.heatmap(shap_clus_values, cmap="bwr", center=0, square=True, xticklabels=feature_names, yticklabels=cluster_names, cbar_kws={"shrink": 0.33})
+
+    return fig, ax
+
+
 def save_summary_as_excel(fname: str,
                           shap_cluster_centers: Dict[int, Optional[np.ndarray]],
                           cluster_labels: np.ndarray,
@@ -616,6 +635,17 @@ for i in range(num_clients):
                           clients_dfs_anom[i],
                           clients_dfs_raw_anom[i],
                           np.column_stack((clients_timestamp_anom[i], clients_recerror_anom[i])))
+
+
+# Plot heatmap of shap values / cluster / client
+for i in range(num_clients):
+    print(f"Client #{i}")
+    fig, ax = heatmap_shap_cluster_client(i, closest_samples, feat_names.str.replace("_", " "))
+    fig.set_size_inches(plot_width*3, plot_height*2.5)
+    fig.tight_layout()
+    # plt.show()
+    fig.savefig(f"{args.input.stem}_heatmap_shap_clus_client_{i}.pdf", format="pdf")
+    plt.close(fig)
 
 # Results, Trees
 # Include here the normal samples (label normal samples as gK)
