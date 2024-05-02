@@ -26,7 +26,8 @@ Activate the environment with:
 
 - This project uses [[https://github.com/xsaga/kfed-rounded][https://github.com/xsaga/kfed-rounded]] for the one-shot federated learning k-means implementation.
   It is a modified fork from the original implementation at [[https://github.com/metastableB/kfed][https://github.com/metastableB/kfed]]
-  by [[https://proceedings.mlr.press/v139/dennis21a.html][Dennis, D. K., Li, T., & Smith, V. (2021, July). Heterogeneity for the win: One-shot federated clustering. In International Conference on Machine Learning (pp. 2611-2620). PMLR]].
-- ~wget~ (optional)
-- ~find~ (optional)
-- ~7zip~ (optional)
+  by [[https://proceedings.mlr.press/v139/dennis21a.html][Dennis, D. K., Li, T., & Smith, V. (2021, July). Heterogeneity for the win: One-shot federated clustering. In International Conference on Machine Learning (pp. 2611-2620). PMLR]]. (already included in the environment.yml file as a dependency).
+- [[https://github.com/xsaga/federated-clustering-internal-validation-metrics][https://github.com/xsaga/federated-clustering-internal-validation-metrics]] for the clustering validation metrics in a federated learning setting. (already included in the environment.yml file as a dependency).
+- ~wget~ (optional, only if you want to automatically download the N-BaIoT dataset, see: nbaiot_download_extract.sh)
+- ~find~ (optional, only if you want to automatically download the N-BaIoT dataset, see: nbaiot_download_extract.sh)
+- ~7zip~ (optional, only if you want to automatically download the N-BaIoT dataset, see: nbaiot_download_extract.sh)
