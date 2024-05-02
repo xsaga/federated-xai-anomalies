@@ -1,4 +1,11 @@
-* federated-xai-anomalies
+* Federated Explainability for Network Anomaly Characterization
+
+This repository contains the source code and implementation of the
+experiments described in the following paper:
+
+Xabier Sáez-de-Cámara, Jose Luis Flores, Cristóbal Arellano, Aitor Urbieta, and Urko Zurutuza. 2023. Federated Explainability for Network Anomaly Characterization. In Proceedings of the 26th International Symposium on Research in Attacks, Intrusions and Defenses (RAID '23). Association for Computing Machinery, New York, NY, USA, 346–365. [[https://doi.org/10.1145/3607199.3607234][https://doi.org/10.1145/3607199.3607234]]
+
+Open access from the conference website [[https://raid2023.org/accepted_open.html][https://raid2023.org/accepted_open.html]]
 
 ** Environment
 
